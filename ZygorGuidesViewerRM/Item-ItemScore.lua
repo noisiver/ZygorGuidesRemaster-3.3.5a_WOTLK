@@ -589,6 +589,24 @@ function ItemScore:GetResolvedItemDetails(itemLinkOrID)
 	return item or self:GetItemDetailsFromDB(itemLinkOrID)
 end
 
+local function item_needs_live_resolution(item)
+	return item and (item.needs_exact_stats or item.needs_live_scan) and true or false
+end
+
+function ItemScore:IsItemPendingResolution(itemOrLink)
+	if not itemOrLink then return false end
+	local item = type(itemOrLink) == "table" and itemOrLink or self:GetResolvedItemDetails(itemOrLink)
+	return item_needs_live_resolution(item)
+end
+
+function ItemScore:GetResolvedItemDetailsReady(itemOrLink)
+	local item = self:GetResolvedItemDetails(itemOrLink)
+	if item and not item_needs_live_resolution(item) then
+		return item
+	end
+	return nil, item
+end
+
 local function get_item_family(item)
 	if not item then return nil end
 	local equipFamily = resolve_family_from_equip_loc(item.equiploc or item.type)
@@ -1076,6 +1094,136 @@ function ItemScore:GetBuildName(classRef, buildNum, level, usesFallback)
 		return buildLabel .. " (Leveling baseline)"
 	end
 	return buildLabel
+end
+
+local BIS_CATEGORY_ORDER = {
+	pre_raid = 0,
+	t7 = 1,
+	t8 = 2,
+	t9 = 3,
+	t10 = 4,
+	rs = 5,
+	final = 6,
+}
+
+local BIS_CATEGORY_LABEL = {
+	pre_raid = "Pre-Raid BIS",
+	t7 = "T7 BIS",
+	t8 = "T8 BIS",
+	t9 = "T9 BIS",
+	t10 = "T10 BIS",
+	rs = "RS BIS",
+	final = "Final BIS",
+}
+
+local function bis_slot_list_contains(list, itemID)
+	if not list or not itemID then return false end
+	for _, candidateID in ipairs(list) do
+		if tonumber(candidateID) == tonumber(itemID) then
+			return true
+		end
+	end
+	return false
+end
+
+function ItemScore:GetCurrentBISPhaseRank()
+	local phases = ZGV and ZGV.Dungeons and ZGV.Dungeons.Phases
+	local highest = nil
+	if phases then
+		for i = 1, 5 do
+			if phases["wotlk"..i] then
+				highest = i
+			end
+		end
+	end
+	return highest or 0
+end
+
+function ItemScore:GetBISAnnotation(itemID, slot, buildNum, classToken)
+	itemID = tonumber(itemID)
+	slot = tonumber(slot)
+	classToken = classToken or self.playerclass
+	buildNum = self:GetResolvedBuild(classToken, self.playerlevel, buildNum or (ZGV and ZGV.db and ZGV.db.char and ZGV.db.char.gear_active_build))
+	if not itemID or not slot or not classToken then return nil end
+
+	local classData = self.BISData and self.BISData[classToken]
+	local buildData = classData and classData[buildNum]
+	if not buildData then return nil end
+
+	local currentRank = self:GetCurrentBISPhaseRank()
+	local bestCurrentCategory, bestCurrentRank = nil, -1
+	local nextFutureCategory, nextFutureRank = nil, math.huge
+
+	for category, slotMap in pairs(buildData) do
+		local rank = BIS_CATEGORY_ORDER[category]
+		local candidates = slotMap and slotMap[slot]
+		if rank and candidates and bis_slot_list_contains(candidates, itemID) then
+			if rank <= currentRank and rank > bestCurrentRank then
+				bestCurrentCategory, bestCurrentRank = category, rank
+			elseif rank > currentRank and rank < nextFutureRank then
+				nextFutureCategory, nextFutureRank = category, rank
+			end
+		end
+	end
+
+	if bestCurrentCategory then
+		return {
+			category = bestCurrentCategory,
+			label = BIS_CATEGORY_LABEL[bestCurrentCategory] or "BIS",
+			filled = true,
+			future = false,
+			final = bestCurrentCategory == "final",
+			build = buildNum,
+			class = classToken,
+		}
+	end
+
+	if nextFutureCategory then
+		return {
+			category = nextFutureCategory,
+			label = BIS_CATEGORY_LABEL[nextFutureCategory] or "BIS",
+			filled = false,
+			future = true,
+			final = nextFutureCategory == "final",
+			build = buildNum,
+			class = classToken,
+		}
+	end
+
+	return nil
+end
+
+function ItemScore:IsEquippedBIS(slot, buildNum, classToken)
+	slot = tonumber(slot)
+	classToken = classToken or self.playerclass
+	buildNum = self:GetResolvedBuild(classToken, self.playerlevel, buildNum or (ZGV and ZGV.db and ZGV.db.char and ZGV.db.char.gear_active_build))
+	if not slot or not classToken then return false, nil end
+	if self:GetCurrentBISPhaseRank() < BIS_CATEGORY_ORDER.rs then
+		return false, nil
+	end
+
+	local classData = self.BISData and self.BISData[classToken]
+	local buildData = classData and classData[buildNum]
+	local finalSlot = buildData and buildData.final and buildData.final[slot]
+	if not finalSlot then
+		return false, nil
+	end
+
+	local equippedLink = GetInventoryItemLink("player", slot)
+	local equippedID = equippedLink and ZGV.ItemLink and ZGV.ItemLink.GetItemID(equippedLink)
+	if equippedID and bis_slot_list_contains(finalSlot, equippedID) then
+		return true, {
+			category = "final",
+			label = "Final BIS Equipped",
+			filled = true,
+			future = false,
+			final = true,
+			build = buildNum,
+			class = classToken,
+		}
+	end
+
+	return false, nil
 end
 
 function ItemScore:GetRuleSourceInfo(classRef, buildNum)
@@ -1681,19 +1829,23 @@ function ItemScore:HandleMasterLootOpened()
 		if itemlink and noticeKey then
 			local item = self:GetResolvedItemDetails(itemlink) or self:GetItemDetailsQueued(itemlink, true)
 			if item then
-				local validity = self:GetItemValidity(itemlink)
-				if validity and not validity.final then
+				if item_needs_live_resolution(item) then
 					self.PendingMasterLootNotice = true
-				elseif validity and validity.valid and validity.code ~= "slot" then
-					local comparison = self:GetMasterLootComparison(itemlink, item, validity)
-					if comparison and (comparison.deltaScore or 0) > 0 then
-						local message = self:FormatMasterLootNotice(itemlink, validity, comparison)
-						if message and DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-							self:MarkMasterLootAnnouncement(noticeKey)
-							DEFAULT_CHAT_FRAME:AddMessage(message)
-						elseif message then
-							self:MarkMasterLootAnnouncement(noticeKey)
-							print(message)
+				else
+					local validity = self:GetItemValidity(itemlink)
+					if validity and not validity.final then
+						self.PendingMasterLootNotice = true
+					elseif validity and validity.valid and validity.code ~= "slot" then
+						local comparison = self:GetMasterLootComparison(itemlink, item, validity)
+						if comparison and (comparison.deltaScore or 0) > 0 then
+							local message = self:FormatMasterLootNotice(itemlink, validity, comparison)
+							if message and DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+								self:MarkMasterLootAnnouncement(noticeKey)
+								DEFAULT_CHAT_FRAME:AddMessage(message)
+							elseif message then
+								self:MarkMasterLootAnnouncement(noticeKey)
+								print(message)
+							end
 						end
 					end
 				end
@@ -1837,6 +1989,15 @@ function ItemScore:RefreshLootRollMarker(rollID, attempt)
 
 	local marker = self:GetOrCreateLootRollMarker(frame)
 	if not marker then return false end
+
+	if item_needs_live_resolution(item) then
+		marker:Hide()
+		if attempt < 15 and ZGV.ScheduleTimer then
+			self.PendingLootRolls[rollID] = true
+			ZGV:ScheduleTimer(function() ItemScore:RefreshLootRollMarker(rollID, attempt + 1) end, 0.3)
+		end
+		return false
+	end
 
 	local validity = self:GetItemValidity(itemlink)
 	if not validity.final then
@@ -2111,6 +2272,9 @@ function ItemScore:GetItemDetails(itemlink,callback,force)
 		warn_missing_itemdb(itemlink, itemID)
 		table.insert(ItemScore.GetItemDetailsQueue,{itemlink,callback,force})
 		return
+	end
+	if callback and item_needs_live_resolution(item) then
+		table.insert(ItemScore.GetItemDetailsQueue,{itemlink,callback,force})
 	end
 	return item
 end
@@ -2731,6 +2895,11 @@ local function ItemScore_SetTooltipData(tooltip, tooltipobj)
 		local item = ItemScore:GetResolvedItemDetails(originalLink) or ItemScore:GetItemDetails(originalLink, refresh_tooltip, true)
 		if not item then
 			-- Item not cached yet - queued for async parse. Tooltip will refresh via callback once data arrives.
+			ItemScore.TooltipPatched = true
+			return
+		end
+		if ItemScore:IsItemPendingResolution(item) then
+			ItemScore:GetItemDetails(originalLink, refresh_tooltip, true)
 			ItemScore.TooltipPatched = true
 			return
 		end

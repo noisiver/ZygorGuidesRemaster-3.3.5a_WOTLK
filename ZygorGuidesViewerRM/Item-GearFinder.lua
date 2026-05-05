@@ -391,10 +391,30 @@ local function set_slot_reject(slot, reason)
 	GearFinder.DebugSlotReject[slot] = tostring(reason or "")
 end
 
+local function set_slot_compare_reject(slot, item)
+	if not slot or not item or not ItemScore or not ItemScore.Upgrades or not ItemScore.Upgrades.GetUpgradeComparison then return end
+	local comparison = ItemScore.Upgrades:GetUpgradeComparison(slot, item)
+	if not comparison then return end
+	local delta = tonumber(comparison.deltaScore) or 0
+	local candidate = tonumber(comparison.candidateScore) or 0
+	local baseline = tonumber(comparison.baselineScore) or 0
+	if comparison.isNewItem then
+		set_slot_reject(slot, ("reject: new item score %.1f"):format(candidate))
+	elseif delta <= 0 then
+		set_slot_reject(slot, ("reject: score %.1f <= %.1f"):format(candidate, baseline))
+	else
+		set_slot_reject(slot, ("reject: delta %.1f"):format(delta))
+	end
+end
+
 local function get_slot_debug_reason(slot)
 	local stats = GearFinder.DebugSlotStats and GearFinder.DebugSlotStats[slot]
 	if GearFinder.LastError then
 		return ("ERR %s"):format(tostring(GearFinder.LastError):sub(1, 30))
+	end
+	local reject = GearFinder.DebugSlotReject and GearFinder.DebugSlotReject[slot]
+	if reject and reject ~= "" then
+		return reject
 	end
 	if not stats then return "DBG:no-data" end
 	return ("S%d R%d V%d M%d F%d U%d"):format(
@@ -756,6 +776,10 @@ end
 local function is_replacement(uses2h, item)
 	if not item then return false end
 
+	if item.type == "INVTYPE_RANGED" or item.type == "INVTYPE_RANGEDRIGHT" or item.type == "INVTYPE_THROWN" then
+		return true
+	end
+
 	if (item.class == LE_ITEM_CLASS_WEAPON) or (item.type=="INVTYPE_HOLDABLE" or item.type=="INVTYPE_SHIELD") then
 		return item.twohander == uses2h
 	end
@@ -836,6 +860,10 @@ local function loot_score_dungeon_thread()
 							end
 						end
 					elseif validity and validity.valid and is_replacement(twohander_equipped, item) then
+						set_slot_compare_reject(validity.slot, item)
+						if validity.slot_2 then
+							set_slot_compare_reject(validity.slot_2, item)
+						end
 						if queue_fallback_candidate(validity.slot, item, itemdata, ident, false) then
 							add_slot_debug(validity.slot, "fallback")
 						end
@@ -843,6 +871,12 @@ local function loot_score_dungeon_thread()
 							if queue_fallback_candidate(validity.slot_2, item, itemdata, ident, false) then
 								add_slot_debug(validity.slot_2, "fallback")
 							end
+						end
+					elseif validity and validity.valid then
+						local rejectReason = twohander_equipped and "reject: 2h blocks offhand" or "reject: slot blocked"
+						set_slot_reject(validity.slot, rejectReason)
+						if validity.slot_2 then
+							set_slot_reject(validity.slot_2, rejectReason)
 						end
 					elseif futurevalid then
 						GearFinder.ItemsToMaybeScore[ident] = GearFinder.ItemsToMaybeScore[ident] or {}
@@ -974,6 +1008,10 @@ local function loot_score_dungeon_thread()
 							end
 						end
 						if validity and validity.valid and is_replacement(twohander_equipped, item) then
+							set_slot_compare_reject(validity.slot, item)
+							if validity.slot_2 then
+								set_slot_compare_reject(validity.slot_2, item)
+							end
 							if not GearFinder.UpgradeQueue[validity.slot][1] or GearFinder.UpgradeQueue[validity.slot][1].future then
 								if queue_fallback_candidate(validity.slot, item, itemdata, dungeon.ident, true) then
 									add_slot_debug(validity.slot, "fallback")
@@ -983,6 +1021,12 @@ local function loot_score_dungeon_thread()
 								if queue_fallback_candidate(validity.slot_2, item, itemdata, dungeon.ident, true) then
 									add_slot_debug(validity.slot_2, "fallback")
 								end
+							end
+						elseif validity and validity.valid then
+							local rejectReason = twohander_equipped and "reject: 2h blocks offhand" or "reject: slot blocked"
+							set_slot_reject(validity.slot, rejectReason)
+							if validity.slot_2 then
+								set_slot_reject(validity.slot_2, rejectReason)
 							end
 						end
 						GearFinder.ItemsToMaybeScore[dungeon.ident][index]=nil
@@ -1276,6 +1320,26 @@ local function make_button(object)
 			GameTooltip:Show()
 		end)
 		button.tooltiphandler:SetScript("OnLeave",function()
+			GameTooltip:FadeOut()
+		end)
+
+	button.bisbadge = CHAIN(CreateFrame("Button", nil, button.tooltiphandler))
+		:SetFrameLevel(button.tooltiphandler:GetFrameLevel()+1)
+		:SetPoint("TOPRIGHT", button.tooltiphandler, "TOPRIGHT", 2, 2)
+		:SetSize(14,14)
+		:Hide()
+	.__END
+		button.bisicon = CHAIN(button.bisbadge:CreateTexture(nil, "ARTWORK"))
+			:SetAllPoints()
+			:SetTexture("Interface\\Common\\ReputationStar")
+		.__END
+		button.bisbadge:SetScript("OnEnter", function()
+			if not button.bisTooltipText then return end
+			GameTooltip:SetOwner(button.bisbadge, "ANCHOR_TOP")
+			GameTooltip:SetText(button.bisTooltipText)
+			GameTooltip:Show()
+		end)
+		button.bisbadge:SetScript("OnLeave", function()
 			GameTooltip:FadeOut()
 		end)
 
@@ -1765,6 +1829,7 @@ function GearFinder:DisplayResults()
 			local tooltipLink = (itemlink and itemlink:match("%[")) and itemlink or upgrade.itemlinkfull or itemlink or upgrade.itemlink
 			local displayLink = (itemlink and itemlink:match("%[")) and itemlink or nil
 			local bossLabel = upgrade.bossname or GF_StaticItemBossNames[upgrade.itemid] or nil
+			local bis = upgrade.itemid and ItemScore.GetBISAnnotation and ItemScore:GetBISAnnotation(upgrade.itemid, slotID) or nil
 			local icon = upgrade.texture
 			if not icon and GetItemIcon then
 				icon = GetItemIcon(upgrade.itemid or upgrade.itemlink)
@@ -1774,6 +1839,20 @@ function GearFinder:DisplayResults()
 			button.link = tooltipLink or nil
 			button.itemicon:SetDesaturated(upgrade.future)
 			button:SetAlpha(1)
+			if bis then
+				button.bisTooltipText = bis.label
+				button.bisbadge:Show()
+				if bis.filled then
+					button.bisicon:SetVertexColor(1.0, 0.84, 0.15, 1.0)
+					button.bisicon:SetDesaturated(false)
+				else
+					button.bisicon:SetVertexColor(0.92, 0.78, 0.32, 0.65)
+					button.bisicon:SetDesaturated(true)
+				end
+			else
+				button.bisTooltipText = nil
+				button.bisbadge:Hide()
+			end
 
 			local dungeon = GF_GetDungeonData(upgrade.ident)
 			button.itemdungeon:SetText((dungeon and dungeon.name) or (L["gearfinder_label_unknown"] or "unknown"))
@@ -1825,7 +1904,21 @@ function GearFinder:DisplayResults()
 			button.dungeonguide = nil
 			button.dungeon = nil
 			button.itemdungeon:SetText(L["gearfinder_no_upgrade"])
-			button.itemencounter:SetText(get_slot_debug_reason(slotID))
+			local equippedBIS, bisInfo = false, nil
+			if ItemScore.IsEquippedBIS then
+				equippedBIS, bisInfo = ItemScore:IsEquippedBIS(slotID)
+			end
+			if equippedBIS then
+				button.itemencounter:SetText("Best In Slot Equipped")
+				button.bisTooltipText = (bisInfo and bisInfo.label) or "Final BIS Equipped"
+				button.bisbadge:Show()
+				button.bisicon:SetVertexColor(1.0, 0.84, 0.15, 1.0)
+				button.bisicon:SetDesaturated(false)
+			else
+				button.itemencounter:SetText(get_slot_debug_reason(slotID))
+				button.bisTooltipText = nil
+				button.bisbadge:Hide()
+			end
 			button.itemicon:SetDesaturated(false)
 			button:SetAlpha(0.5)
 		end
@@ -1950,6 +2043,8 @@ function GearFinder:ClearResults()
 		button.itemlink:SetText(" ")
 		button.link = nil
 		button.dungeonguide = nil
+		button.bisTooltipText = nil
+		if button.bisbadge then button.bisbadge:Hide() end
 		button.itemdungeon:SetText(L["gearfinder_no_upgrade"])
 		button.itemencounter:SetText(" ")
 		button.itemicon:SetDesaturated(false)
