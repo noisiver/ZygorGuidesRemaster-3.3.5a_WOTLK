@@ -1,6 +1,6 @@
 ﻿-- ZygorItemDB.lua
 -- Updated: 2026-05-04 17:42:17 -05:00
--- AzerothCore 3.3.5a Export | 24928 Items
+-- AzerothCore 3.3.5a Export | 24933 Items
 --
 -- Fields per item:
 --   n  = Name
@@ -24954,6 +24954,11 @@ ZygorItemDB.items = {
 	[53048]={n="Doomsday Message",i=1,q=1,s="Back",cl=-1,rc=-1,rl=0,st={},ar=0,bk=0,w=nil,re=nil,so=nil,sb=0,se=0,bd=4},
 	[53891]={n="Monster - Shield, Zulaman (Blue)",i=1,q=4,s="Shield",cl=-1,rc=-1,rl=1,st={},ar=0,bk=0,w=nil,re=nil,so=nil,sb=0,se=0,bd=1},
 	[53924]={n="Monster - Sword, Troll 1H",i=1,q=4,s="OneHand",cl=-1,rc=-1,rl=1,st={},ar=0,bk=0,w=nil,re=nil,so=nil,sb=0,se=0,bd=1},
+	[1749]={n="Linked Chain Cloak",i=23,q=1,s="Back",cl=-1,rc=-1,rl=18,st={},ar=17,bk=0,w=nil,re=nil,so=nil,sb=0,se=0,bd=0},
+	[1761]={n="Reinforced Chain Vest",i=28,q=1,s="Chest",cl=-1,rc=-1,rl=23,st={},ar=173,bk=0,w=nil,re=nil,so=nil,sb=0,se=0,bd=0},
+	[1795]={n="Rawhide Belt",i=24,q=1,s="Waist",cl=-1,rc=-1,rl=19,st={},ar=42,bk=0,w=nil,re=nil,so=nil,sb=0,se=0,bd=0},
+	[1830]={n="Long Bastard Sword",i=28,q=1,s="TwoHand",cl=-1,rc=-1,rl=23,st={},ar=0,bk=0,w={29.0,44.0,0,0.0,0.0,0,3200},re=nil,so=nil,sb=0,se=0,bd=0},
+	[3794]={n="Interlaced Bracers",i=38,q=1,s="Wrists",cl=-1,rc=-1,rl=33,st={},ar=20,bk=0,w=nil,re=nil,so=nil,sb=0,se=0,bd=0},
 }
 
 -- Ende ZygorItemDB.lua

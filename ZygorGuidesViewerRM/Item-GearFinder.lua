@@ -187,6 +187,76 @@ local function GF_IsPhaseActive(phase)
 	return ZGV.Dungeons and ZGV.Dungeons.Phases and ZGV.Dungeons.Phases[phase]
 end
 
+local function GF_GetFactionVendor(source)
+	if type(source) ~= "table" or type(source.vendors) ~= "table" then return nil end
+	local faction = (UnitFactionGroup and UnitFactionGroup("player")) or GearFinder.playerfaction or "Alliance"
+	return source.vendors[faction] or source.vendors.Neutral
+end
+
+local function GF_IsValidVendorSource(source)
+	if not source then return false, "missing source" end
+	if ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_currency_rewards == false then
+		return false, "currency filtered out"
+	end
+	if source.expansionLevel and source.expansionLevel > (GearFinder.CurrentExpansion or 2) then
+		return false, "no expansion " .. source.expansionLevel
+	end
+	if source.minLevel and source.minLevel > (ItemScore.playerlevel or 0) then
+		return false, "need level " .. source.minLevel
+	end
+	if not GF_IsPhaseActive(source.phase) then
+		return false, "phase inactive"
+	end
+	return true
+end
+
+local function GF_HasAnySourceEnabled()
+	local profile = ZGV.db and ZGV.db.profile
+	if not profile or profile.autogear == false then return false end
+	if profile.gear_1 then return true end
+	if profile.gear_2 then return true end
+	if profile.gear_3 or profile.gear_4 then return true end
+	if profile.gear_5 or profile.gear_6 then return true end
+	if profile.gear_currency_rewards then return true end
+	return false
+end
+
+local function GF_AddVendorFields(item, itemdata)
+	if not item or not itemdata then return item end
+	item.sourceType = itemdata.sourceType
+	item.vendorSource = itemdata.vendorSource
+	item.vendorSourceName = itemdata.vendorSourceName
+	item.currency = itemdata.currency
+	item.currencyItem = itemdata.currencyItem
+	item.cost = itemdata.cost
+	item.vendorName = itemdata.vendorName
+	item.vendorLocation = itemdata.vendorLocation
+	item.vendorShortLocation = itemdata.vendorShortLocation
+	item.vendorWaypoint = itemdata.vendorWaypoint
+	return item
+end
+
+local function GF_FormatVendorLine(upgrade)
+	local cost = tonumber(upgrade.cost)
+	local currency = upgrade.currency or "currency"
+	local location = upgrade.vendorShortLocation or upgrade.vendorLocation
+	local costText
+	if cost and cost > 0 then
+		costText = ("%d %s"):format(cost, currency)
+	else
+		costText = currency
+	end
+	if location and location ~= "" then
+		return ("%s - %s"):format(costText, location)
+	end
+	return costText
+end
+
+local function GF_FormatVendorLocation(upgrade)
+	local vendor = upgrade.vendorName or upgrade.vendorSourceName or "Vendor"
+	return ("%s - Dalaran"):format(vendor)
+end
+
 local function GF_GetDungeonLeafName(dungeonName)
 	if not dungeonName then return nil end
 	return tostring(dungeonName):match("([^\\]+)$")
@@ -883,6 +953,7 @@ queue_fallback_candidate = function(slot, item, itemdata, ident, future)
 		cached_name = item.cached_name or item.name,
 		approximateText = L["gearfinder_no_upgrade"],
 	}
+	GF_AddVendorFields(candidate, itemdata)
 
 	if future then
 		local dungeon = GF_GetDungeonData(ident)
@@ -931,6 +1002,7 @@ end
 local function loot_score_dungeon_thread()
 	local total_current, total_future = 0,0
 	for _,dungeon in pairs(GearFinder.ItemsToScore) do total_current = total_current + #dungeon end
+	for _,source in pairs(GearFinder.VendorItemsToScore) do total_current = total_current + #source end
 	for _,dungeon in pairs(GearFinder.ItemsToMaybeScore) do total_future = total_future + #dungeon end
 	local total = total_current + total_future
 	if total <= 0 then total = 1 end
@@ -1025,6 +1097,90 @@ local function loot_score_dungeon_thread()
 			end
 			ZGV:Debug("&gear current scored %d of %d/%d",success_counter,total_current,total)
 			ZGV:Debug("&gear current failed %d",fail_counter)
+			coroutine.yield()
+			local ready = success_counter / total * 100
+			GearFinder.MainFrame.Progress:SetPercent(ready)
+		end
+		if fail_counter==0 then break end
+	end
+
+	while true do
+		local fail_counter = 0
+		for ident,sourceItems in pairs(GearFinder.VendorItemsToScore) do
+			for index,itemdata in pairs(sourceItems) do
+				local itemlink = itemdata.itemlink
+				for slot in pairs(GearFinder.UpgradeQueue) do
+					add_slot_debug(slot, "seen")
+				end
+				local item, itemerr = safe_get_item_details(itemlink)
+				if itemerr then GearFinder.LastError = itemerr end
+				if not item then
+					queue_local_meta_candidate(itemlink, itemdata, ident, false)
+					queue_bare_fallback_candidate(itemlink, itemdata, ident, false)
+					itemdata.resolve_attempts = (itemdata.resolve_attempts or 0) + 1
+					if itemdata.resolve_attempts >= GearFinder.ITEM_RESOLVE_RETRY_LIMIT then
+						ZGV:Debug("&gear dropping unresolved vendor item after %d attempts: %s",itemdata.resolve_attempts,tostring(itemlink))
+						GearFinder.HadUnresolvedItems = true
+						GearFinder.VendorItemsToScore[ident][index]=nil
+					else
+						fail_counter = fail_counter + 1
+					end
+				else
+					success_counter = success_counter + 1
+					local is_upgrade, slot, change, score, comment, futurevalid, slot_2, change_2  = GF_EvaluateUpgrade(itemlink)
+					local validity = ItemScore:GetItemValidity(itemlink)
+					if validity and validity.slot then
+						add_slot_debug(validity.slot, "resolved")
+						if validity.valid then add_slot_debug(validity.slot, "valid") end
+					end
+					if validity and validity.slot_2 then
+						add_slot_debug(validity.slot_2, "resolved")
+						if validity.valid then add_slot_debug(validity.slot_2, "valid") end
+					end
+					if is_upgrade and validity and validity.valid and is_replacement(twohander_equipped,item) then
+						local queuedItem = clone_item_entry(item)
+						queuedItem.ident = ident
+						queuedItem.itemid = queuedItem.itemid or (ZGV.ItemLink and ZGV.ItemLink.GetItemID(itemlink)) or queuedItem.itemid
+						queuedItem.itemlinkfull = queuedItem.itemlinkfull or itemlink
+						queuedItem.cached_name = queuedItem.cached_name or queuedItem.name
+						queuedItem.change = change
+						GF_AddVendorFields(queuedItem, itemdata)
+						table.insert(GearFinder.UpgradeQueue[slot],queuedItem)
+						add_slot_debug(slot, "upgrades")
+
+						if slot_2 then
+							queuedItem.change_2 = change_2
+							table.insert(GearFinder.UpgradeQueue[slot_2],queuedItem)
+							add_slot_debug(slot_2, "upgrades")
+						end
+					elseif validity and validity.valid and is_replacement(twohander_equipped, item) then
+						set_slot_compare_reject(validity.slot, item)
+						if validity.slot_2 then
+							set_slot_compare_reject(validity.slot_2, item)
+						end
+						if queue_fallback_candidate(validity.slot, item, itemdata, ident, false) then
+							add_slot_debug(validity.slot, "fallback")
+						end
+						if validity.slot_2 then
+							if queue_fallback_candidate(validity.slot_2, item, itemdata, ident, false) then
+								add_slot_debug(validity.slot_2, "fallback")
+							end
+						end
+					elseif validity and validity.valid then
+						local rejectReason = twohander_equipped and "reject: 2h blocks offhand" or "reject: slot blocked"
+						set_slot_reject(validity.slot, rejectReason)
+						if validity.slot_2 then
+							set_slot_reject(validity.slot_2, rejectReason)
+						end
+					elseif futurevalid then
+						GearFinder.ItemsToMaybeScore[ident] = GearFinder.ItemsToMaybeScore[ident] or {}
+						table.insert(GearFinder.ItemsToMaybeScore[ident],itemdata)
+					end
+					GearFinder.VendorItemsToScore[ident][index]=nil
+				end
+			end
+			ZGV:Debug("&gear vendor scored %d of %d/%d",success_counter,total_current,total)
+			ZGV:Debug("&gear vendor failed %d",fail_counter)
 			coroutine.yield()
 			local ready = success_counter / total * 100
 			GearFinder.MainFrame.Progress:SetPercent(ready)
@@ -1283,6 +1439,7 @@ end
 -- no returns
 GearFinder.ItemsToScore = {}
 GearFinder.ItemsToMaybeScore = {}
+GearFinder.VendorItemsToScore = {}
 GearFinder.FutureDungeons = {}
 GearFinder.HadUnresolvedItems = false
 GearFinder.DebugSummary = {}
@@ -1315,11 +1472,19 @@ function GearFinder:ScoreDungeonItems()
 	for i,v in pairs(GearFinder.FallbackQueue) do table.wipe(v) end
 	table.wipe(GearFinder.ItemsToScore)
 	table.wipe(GearFinder.ItemsToMaybeScore)
+	table.wipe(GearFinder.VendorItemsToScore)
 	table.wipe(GearFinder.FutureDungeons)
 	table.wipe(GearFinder.DebugSummary)
+	if GearFinder.MainFrame.NoSourcesFrame then GearFinder.MainFrame.NoSourcesFrame:Hide() end
+
+	if not GF_HasAnySourceEnabled() then
+		GearFinder.DebugSummary.noSources = true
+		GearFinder:ShowNoSourcesMessage()
+		return
+	end
 
 	local faction = self.playerfaction=="Alliance" and 1 or 2
-	local sourceInstances, validDungeons, futureDungeons = 0, 0, 0
+	local sourceInstances, validDungeons, futureDungeons, validVendorSources, vendorItems = 0, 0, 0, 0, 0
 	local invalidReasons = {}
 
 	-- 3.3.5a: no mythic+, no modified instances
@@ -1382,10 +1547,42 @@ function GearFinder:ScoreDungeonItems()
 		end
 		end
 	end
+	for sourceKey, source in pairs(ItemScore.GearFinderVendorSources or {}) do
+		local valid, comment = GF_IsValidVendorSource(source)
+		if valid then
+			local vendor = GF_GetFactionVendor(source) or {}
+			validVendorSources = validVendorSources + 1
+			local ident = "vendor:" .. tostring(source.key or sourceKey)
+			GearFinder.VendorItemsToScore[ident] = GearFinder.VendorItemsToScore[ident] or {}
+			for itemid, itemSource in pairs(source.items or {}) do
+				local itemlink = "item:" .. tostring(itemid)
+				if GF_ShouldIncludeCandidate(itemlink, false) then
+					table.insert(GearFinder.VendorItemsToScore[ident], {
+						itemlink = itemlink,
+						sourceType = source.sourceType or "currency",
+						vendorSource = source.key or sourceKey,
+						vendorSourceName = source.name,
+						currency = itemSource.currency or source.currency,
+						currencyItem = itemSource.currencyItem or source.currencyItem,
+						cost = itemSource.cost,
+						vendorName = itemSource.vendorName or vendor.name,
+						vendorLocation = itemSource.vendorLocation or vendor.location or source.location,
+						vendorShortLocation = itemSource.vendorShortLocation or vendor.shortLocation,
+						vendorWaypoint = itemSource.vendorWaypoint or vendor.waypoint,
+					})
+					vendorItems = vendorItems + 1
+				end
+			end
+		else
+			invalidReasons[comment or "invalid vendor source"] = (invalidReasons[comment or "invalid vendor source"] or 0) + 1
+		end
+	end
 	GearFinder.DebugSummary.player = tostring(player)
 	GearFinder.DebugSummary.sourceInstances = sourceInstances
 	GearFinder.DebugSummary.validDungeons = validDungeons
 	GearFinder.DebugSummary.futureDungeons = futureDungeons
+	GearFinder.DebugSummary.validVendorSources = validVendorSources
+	GearFinder.DebugSummary.vendorItems = vendorItems
 	GearFinder.DebugSummary.invalidReasons = invalidReasons
 	GearFinder.DebugSummary.gear1 = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_1 and true or false
 	GearFinder.DebugSummary.gear2 = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_2 and true or false
@@ -1756,6 +1953,43 @@ function GearFinder:CreateMainFrame()
 		MF.Buttons[object[2]] = button
 	end
 
+	MF.NoSourcesFrame = CHAIN(ZGV.CreateFrameWithBG("Frame", nil, MF.CenterColumn))
+		:SetPoint("CENTER", MF.CenterColumn, "CENTER", 0, 12)
+		:SetSize(360, 112)
+		:SetFrameLevel(MF.CenterColumn:GetFrameLevel() + 10)
+		:EnableMouse(true)
+		:Hide()
+	.__END
+	MF.NoSourcesFrame:SetBackdropColor(0.04, 0.04, 0.07, 0.96)
+	MF.NoSourcesFrame:SetBackdropBorderColor(0.46, 0.36, 0.16, 0.9)
+	MF.NoSourcesFrame.Title = CHAIN(MF.NoSourcesFrame:CreateFontString(nil, "OVERLAY"))
+		:SetPoint("TOP", MF.NoSourcesFrame, "TOP", 0, -14)
+		:SetFont(FONTBOLD, 13)
+		:SetTextColor(0.96, 0.90, 0.74)
+		:SetText("Choose Gear Finder sources")
+	.__END
+	MF.NoSourcesFrame.Text = CHAIN(MF.NoSourcesFrame:CreateFontString(nil, "OVERLAY"))
+		:SetPoint("TOP", MF.NoSourcesFrame.Title, "BOTTOM", 0, -7)
+		:SetWidth(310)
+		:SetFont(FONT, 9)
+		:SetJustifyH("CENTER")
+		:SetTextColor(0.80, 0.78, 0.70)
+		:SetText("No dungeon, raid, or currency reward sources are enabled.")
+	.__END
+	MF.NoSourcesFrame.Button = CHAIN(ZGV.CreateFrameWithBG("Button", nil, MF.NoSourcesFrame))
+		:SetPoint("BOTTOM", MF.NoSourcesFrame, "BOTTOM", 0, 12)
+		:SetSize(150, 24)
+		:SetScript("OnClick", function() ZGV:OpenOptions("gear") end)
+	.__END
+	MF.NoSourcesFrame.Button:SetBackdropColor(0.16, 0.12, 0.04, 0.95)
+	MF.NoSourcesFrame.Button:SetBackdropBorderColor(0.64, 0.48, 0.18, 0.95)
+	MF.NoSourcesFrame.Button.Text = CHAIN(MF.NoSourcesFrame.Button:CreateFontString(nil, "OVERLAY"))
+		:SetPoint("CENTER", MF.NoSourcesFrame.Button, "CENTER", 0, 0)
+		:SetFont(FONTBOLD, 10)
+		:SetTextColor(0.98, 0.92, 0.72)
+		:SetText("Open Source Settings")
+	.__END
+
 	MF.FooterBar = CHAIN(ZGV.CreateFrameWithBG("Frame", nil, MF))
 		:SetPoint("BOTTOMLEFT", MF, "BOTTOMLEFT", 12, 10)
 		:SetPoint("BOTTOMRIGHT", MF, "BOTTOMRIGHT", -12, 10)
@@ -2000,6 +2234,7 @@ function GearFinder:DisplayResults()
 	if not GearFinder.MainFrame then return end
 
 	local MF = GearFinder.MainFrame
+	if MF.NoSourcesFrame then MF.NoSourcesFrame:Hide() end
 	local Buttons = MF.Buttons
 	local dungeons = {}
 
@@ -2014,9 +2249,12 @@ function GearFinder:DisplayResults()
 				end
 			end
 		end
-		local currentCount, futureCount = 0, 0
+		local currentCount, futureCount, vendorCount = 0, 0, 0
 		for _, dungeonItems in pairs(GearFinder.ItemsToScore or {}) do
 			currentCount = currentCount + #dungeonItems
+		end
+		for _, vendorItems in pairs(GearFinder.VendorItemsToScore or {}) do
+			vendorCount = vendorCount + #vendorItems
 		end
 		for _, dungeonItems in pairs(GearFinder.ItemsToMaybeScore or {}) do
 			futureCount = futureCount + #dungeonItems
@@ -2035,9 +2273,10 @@ function GearFinder:DisplayResults()
 				tonumber(summary.validDungeons) or 0,
 				tonumber(summary.futureDungeons) or 0
 			),
-			("Pool C:%d  F:%d  DB primed:%d  DB only:%d"):format(
+			("Pool C:%d  F:%d  V:%d  DB primed:%d  DB only:%d"):format(
 				currentCount,
 				futureCount,
+				vendorCount,
 				tonumber(dbstats.primed) or 0,
 				tonumber(dbstats.dbonly) or 0
 			),
@@ -2100,7 +2339,12 @@ function GearFinder:DisplayResults()
 			local dungeon = GF_GetDungeonData(upgrade.ident)
 			button.itemdungeon:SetText((dungeon and dungeon.name) or (L["gearfinder_label_unknown"] or "unknown"))
 
-			if upgrade.future then
+			if upgrade.sourceType == "currency" then
+				button.dungeonguide = nil
+				button.dungeon = nil
+				button.itemdungeon:SetText(GF_FormatVendorLocation(upgrade))
+				button.itemencounter:SetText(GF_FormatVendorLine(upgrade))
+			elseif upgrade.future then
 				button:SetAlpha(0.5)
 				local playeritemlvl = ItemScore.playeritemlvl or 0
 				if upgrade.minlevel and upgrade.minlevel > ItemScore.playerlevel then
@@ -2172,7 +2416,7 @@ function GearFinder:DisplayResults()
 	local dungeon_totals = {}
 	for _, slotupgrades in pairs(GearFinder.UpgradeQueue or {}) do
 		local candidate = slotupgrades and slotupgrades[1]
-		if candidate and candidate.ident and candidate.ident~="titanrune_alpha" and candidate.ident~="titanrune_beta" then
+		if candidate and candidate.ident and candidate.sourceType ~= "currency" and candidate.ident~="titanrune_alpha" and candidate.ident~="titanrune_beta" then
 			local bucket = dungeon_totals[candidate.ident] or {count=0, weight=0}
 			bucket.count = bucket.count + 1
 			bucket.weight = bucket.weight + math.max(0, tonumber(candidate.change) or tonumber(candidate.score) or tonumber(candidate.itemlvl) or 0)
@@ -2244,6 +2488,52 @@ function GearFinder:DisplayResults()
 
 end
 
+function GearFinder:ShowNoSourcesMessage()
+	if not GearFinder.MainFrame then return end
+	local MF = GearFinder.MainFrame
+	GearFinder.ResultsReady = true
+	GearFinder.DungeonItemsScored = true
+	GearFinder.BestDungeonGuide = nil
+	if MF.Progress then MF.Progress:Hide() end
+	if MF.overlay then MF.overlay:Hide() end
+	if MF.ErrorBox then
+		MF.ErrorBox.Text:SetText("")
+		MF.ErrorBox:Hide()
+	end
+
+	for _, button in pairs(MF.Buttons or {}) do
+		button.itemicon:SetTexture(button.slotTexture)
+		button.itemlink:SetText(" ")
+		button.link = nil
+		button.dungeonguide = nil
+		button.dungeon = nil
+		button.bisTooltipText = nil
+		if button.bisbadge then button.bisbadge:Hide() end
+		button.itemdungeon:SetText(L["gearfinder_no_upgrade"])
+		button.itemencounter:SetText("Choose sources in Gear Advisor options.")
+		button.itemicon:SetDesaturated(false)
+		button:SetAlpha(0.35)
+		if button.SetResultState then button:SetResultState(false, false) end
+	end
+
+	local footerImage = GF_GetFallbackFooterImageForLevel(ItemScore.playerlevel)
+	if MF.FooterArt then
+		MF.FooterArt:SetTexture(footerImage)
+		MF.FooterArt:Show()
+	end
+	MF.DungeonImage:SetTexture(nil)
+	MF.DungeonImage:Hide()
+	MF.DungeonMessage:SetText("Gear Finder sources")
+	MF.DungeonName:SetText("No sources enabled")
+	MF.DungeonName:Show()
+	MF.DungeonDesc:SetText("Choose dungeon, raid, or currency reward sources.")
+	MF.DungeonDesc:Show()
+	MF.DungeonReason:SetText("")
+	MF.DungeonReason:Hide()
+	MF.AddButton:Hide()
+	if MF.NoSourcesFrame then MF.NoSourcesFrame:Show() end
+end
+
 -- clears all displayed results, to be used when gearfinder/itemscore settings are changed or when user changes level/spec
 -- no params
 -- no returns
@@ -2289,6 +2579,7 @@ function GearFinder:ClearResults()
 		MF.ErrorBox.Text:SetText("")
 		MF.ErrorBox:Hide()
 	end
+	if MF.NoSourcesFrame then MF.NoSourcesFrame:Hide() end
 
 	for i,button in pairs(MF.Buttons) do
 		button.itemicon:SetTexture(button.slotTexture)
@@ -2307,6 +2598,13 @@ function GearFinder:ClearResults()
 end
 
 function GearFinder:RefreshForInventoryChange()
+	GearFinder:ClearResults()
+	if GearFinder.MainFrame and GearFinder.MainFrame:IsVisible() then
+		GearFinder:ScoreDungeonItems()
+	end
+end
+
+function GearFinder:RefreshAfterSourceSettingChange()
 	GearFinder:ClearResults()
 	if GearFinder.MainFrame and GearFinder.MainFrame:IsVisible() then
 		GearFinder:ScoreDungeonItems()

@@ -164,6 +164,14 @@ This addon is fully open source and can be inspected before use.
 
 ## Changelog
 
+### Revision 155 - 3.0.155
+
+- Added sourced Emblem of Heroism currency reward suggestions in Gear Finder, including currency cost, faction vendor, and Dalaran location display.
+- Added a Gear Finder no-source message with an Open Source Settings button when no dungeon, raid, or currency reward sources are enabled.
+- Made Gear Finder refresh immediately when source options are changed while the finder is open.
+- Fixed the currency reward source table load path for the 3.3.5a addon runtime and backfilled missing item database records for IDs `1749`, `1761`, `1795`, `1830`, and `3794`.
+- Updated addon version metadata to 3.0.155.
+
 ### Revision 154 - 3.0.154
 
 - Expanded Gear Finder footer artwork so every suggestable dungeon and raid source resolves to an existing guide image, including Classic, TBC, WotLK raids, and world-boss style sources.
