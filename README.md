@@ -164,6 +164,15 @@ This addon is fully open source and can be inspected before use.
 
 ## Changelog
 
+### Revision 156 - 3.0.156
+
+- Added profession-crafted Gear Finder sources with separate options for crafted items, leveling crafts, and PvP starter crafted sets.
+- Added crafted-source display details, including profession, minimum skill, specialization/profession-only requirements, bind behavior, and source tooltips.
+- Expanded crafted item metadata coverage so crafted suggestions continue to resolve slot and armor/weapon-family details during item-cache misses.
+- Updated Gear Finder practical ranking so nearby dungeon drops are preferred over raid-crafted BoE fallback suggestions by default.
+- Fixed Pit of Saron Gear Finder boss labels for normal and heroic loot, including Garfrost, Krick and Ick, and Scourgelord Tyrannus fallback mappings.
+- Updated addon version metadata to 3.0.156.
+
 ### Revision 155 - 3.0.155
 
 - Added sourced Emblem of Heroism currency reward suggestions in Gear Finder, including currency cost, faction vendor, and Dalaran location display.

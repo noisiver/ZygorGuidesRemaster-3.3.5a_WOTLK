@@ -75,8 +75,54 @@ local GF_StaticBossNames = {
 
 local GF_StaticItemBossNames = {
 	[47218]="Argent Confessor Paletress",
+	[49801]="Forgemaster Garfrost",
+	[49802]="Forgemaster Garfrost",
+	[49803]="Forgemaster Garfrost",
+	[49804]="Forgemaster Garfrost",
+	[49805]="Forgemaster Garfrost",
+	[49806]="Forgemaster Garfrost",
+	[49807]="Krick and Ick",
+	[49808]="Krick and Ick",
+	[49809]="Krick and Ick",
+	[49810]="Krick and Ick",
+	[49811]="Krick and Ick",
+	[49812]="Krick and Ick",
+	[49813]="Scourgelord Tyrannus",
+	[49816]="Scourgelord Tyrannus",
+	[49817]="Scourgelord Tyrannus",
+	[49818]="Scourgelord Tyrannus",
+	[49819]="Scourgelord Tyrannus",
+	[49820]="Scourgelord Tyrannus",
+	[49821]="Scourgelord Tyrannus",
+	[49822]="Scourgelord Tyrannus",
 	[49823]="Scourgelord Tyrannus",
+	[49824]="Scourgelord Tyrannus",
 	[49825]="Scourgelord Tyrannus",
+	[49826]="Scourgelord Tyrannus",
+	[50227]="Forgemaster Garfrost",
+	[50228]="Forgemaster Garfrost",
+	[50229]="Forgemaster Garfrost",
+	[50230]="Forgemaster Garfrost",
+	[50233]="Forgemaster Garfrost",
+	[50234]="Forgemaster Garfrost",
+	[50235]="Krick and Ick",
+	[50262]="Krick and Ick",
+	[50263]="Krick and Ick",
+	[50264]="Krick and Ick",
+	[50265]="Krick and Ick",
+	[50266]="Krick and Ick",
+	[50259]="Scourgelord Tyrannus",
+	[50267]="Scourgelord Tyrannus",
+	[50268]="Scourgelord Tyrannus",
+	[50269]="Scourgelord Tyrannus",
+	[50270]="Scourgelord Tyrannus",
+	[50271]="Scourgelord Tyrannus",
+	[50272]="Scourgelord Tyrannus",
+	[50273]="Scourgelord Tyrannus",
+	[50283]="Scourgelord Tyrannus",
+	[50284]="Scourgelord Tyrannus",
+	[50285]="Scourgelord Tyrannus",
+	[50286]="Scourgelord Tyrannus",
 }
 
 local cachedBossNameById
@@ -193,6 +239,98 @@ local function GF_GetFactionVendor(source)
 	return source.vendors[faction] or source.vendors.Neutral
 end
 
+local function GF_NormalizeProfessionName(name)
+	if not name then return nil end
+	return tostring(name):lower():gsub("[^a-z]", "")
+end
+
+local function GF_GetPlayerProfessionSkills()
+	local skills = {}
+	if GetProfessions and GetProfessionInfo then
+		local p1, p2, archaeology, fishing, cooking, firstAid = GetProfessions()
+		local professionIndexes = { p1, p2, archaeology, fishing, cooking, firstAid }
+		for _, index in ipairs(professionIndexes) do
+			if index then
+				local name, icon, rank = GetProfessionInfo(index)
+				local normalized = GF_NormalizeProfessionName(name)
+				if normalized then skills[normalized] = tonumber(rank) or 0 end
+			end
+		end
+	end
+	if GetNumSkillLines and GetSkillLineInfo then
+		for i = 1, GetNumSkillLines() do
+			local skillName, header, isExpanded, skillRank = GetSkillLineInfo(i)
+			local normalized = GF_NormalizeProfessionName(skillName)
+			if normalized then
+				skills[normalized] = math.max(skills[normalized] or 0, tonumber(skillRank) or 0)
+			end
+		end
+	end
+	return skills
+end
+
+local function GF_GetPlayerProfessionSkill(profession)
+	local normalized = GF_NormalizeProfessionName(profession)
+	if not normalized then return 0 end
+	GearFinder.PlayerProfessionSkills = GearFinder.PlayerProfessionSkills or GF_GetPlayerProfessionSkills()
+	return GearFinder.PlayerProfessionSkills[normalized] or 0
+end
+
+local function GF_PlayerKnowsSpell(spellID)
+	if not spellID then return false end
+	if IsSpellKnown and IsSpellKnown(spellID) then return true end
+	if IsPlayerSpell and IsPlayerSpell(spellID) then return true end
+	local spellName = GetSpellInfo and GetSpellInfo(spellID)
+	if not spellName or not GetNumSpellTabs or not GetSpellTabInfo or not GetSpellName then return false end
+	local bookType = BOOKTYPE_SPELL or "spell"
+	for tab = 1, GetNumSpellTabs() do
+		local name, texture, offset, numSpells = GetSpellTabInfo(tab)
+		offset = tonumber(offset) or 0
+		numSpells = tonumber(numSpells) or 0
+		for i = offset + 1, offset + numSpells do
+			local ok, knownName = pcall(GetSpellName, i, bookType)
+			if ok and knownName == spellName then return true end
+		end
+	end
+	return false
+end
+
+local function GF_GetPlayerProfessionSpecializations()
+	local specs = {}
+	local known = {
+		spellfire_tailoring = 26797,
+		mooncloth_tailoring = 26798,
+		shadoweave_tailoring = 26801,
+		dragonscale_leatherworking = 10656,
+		elemental_leatherworking = 10658,
+		tribal_leatherworking = 10660,
+	}
+	for key, spellID in pairs(known) do
+		if GF_PlayerKnowsSpell(spellID) then specs[key] = true end
+	end
+	return specs
+end
+
+local function GF_HasPlayerProfessionSpecialization(specialization)
+	if not specialization then return true end
+	GearFinder.PlayerProfessionSpecializations = GearFinder.PlayerProfessionSpecializations or GF_GetPlayerProfessionSpecializations()
+	return GearFinder.PlayerProfessionSpecializations[specialization] and true or false
+end
+
+local function GF_CompactMapKeys(map)
+	if type(map) ~= "table" then return "" end
+	local keys = {}
+	for key, value in pairs(map) do
+		if value and type(value) == "number" and value > 0 then
+			keys[#keys + 1] = ("%s:%d"):format(tostring(key), value)
+		elseif value then
+			keys[#keys + 1] = tostring(key)
+		end
+	end
+	table.sort(keys)
+	return table.concat(keys, ",")
+end
+
 local function GF_IsValidVendorSource(source)
 	if not source then return false, "missing source" end
 	if ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_currency_rewards == false then
@@ -210,6 +348,54 @@ local function GF_IsValidVendorSource(source)
 	return true
 end
 
+local function GF_IsValidCraftedSource(source)
+	if not source then return false, "missing crafted source" end
+	if ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_crafted_items == false then
+		return false, "crafted filtered out"
+	end
+	if (source.category == "leveling" or source.category == "pvp") and ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_crafted_leveling_items == false then
+		return false, "crafted leveling filtered out"
+	end
+	if source.category == "pvp" and ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_crafted_pvp_items == false then
+		return false, "crafted pvp filtered out"
+	end
+	if source.expansionLevel and source.expansionLevel > (GearFinder.CurrentExpansion or 2) then
+		return false, "no expansion " .. source.expansionLevel
+	end
+	if source.minLevel and source.minLevel > (ItemScore.playerlevel or 0) then
+		return false, "need level " .. source.minLevel
+	end
+	if not GF_IsPhaseActive(source.phase) then
+		return false, "phase inactive"
+	end
+	return true
+end
+
+local function GF_IsValidCraftedItem(source, itemSource)
+	if type(source) ~= "table" then return false, "missing crafted source" end
+	itemSource = itemSource or {}
+	local professionOnly = itemSource.professionOnly
+	if professionOnly == nil then professionOnly = source.professionOnly end
+	local bind = itemSource.bind or source.bind
+	if professionOnly or bind == "bop" then
+		local profession = itemSource.profession or source.profession
+		local minSkill = tonumber(itemSource.minSkill or source.minSkill) or 0
+		local playerSkill = GF_GetPlayerProfessionSkill(profession)
+		if playerSkill < minSkill then
+			return false, ("need %s %d"):format(tostring(profession or "profession"), minSkill)
+		end
+	end
+	local specialization = itemSource.specialization or source.specialization
+	if specialization and not GF_HasPlayerProfessionSpecialization(specialization) then
+		return false, ("need %s"):format(tostring(specialization))
+	end
+	local minLevel = tonumber(itemSource.minLevel or source.minLevel) or 0
+	if minLevel > (tonumber(ItemScore.playerlevel) or 0) then
+		return false, ("need level %d"):format(minLevel)
+	end
+	return true
+end
+
 local function GF_HasAnySourceEnabled()
 	local profile = ZGV.db and ZGV.db.profile
 	if not profile or profile.autogear == false then return false end
@@ -217,7 +403,8 @@ local function GF_HasAnySourceEnabled()
 	if profile.gear_2 then return true end
 	if profile.gear_3 or profile.gear_4 then return true end
 	if profile.gear_5 or profile.gear_6 then return true end
-	if profile.gear_currency_rewards then return true end
+	if profile.gear_currency_rewards ~= false then return true end
+	if profile.gear_crafted_items ~= false then return true end
 	return false
 end
 
@@ -233,6 +420,15 @@ local function GF_AddVendorFields(item, itemdata)
 	item.vendorLocation = itemdata.vendorLocation
 	item.vendorShortLocation = itemdata.vendorShortLocation
 	item.vendorWaypoint = itemdata.vendorWaypoint
+	item.profession = itemdata.profession
+	item.minProfessionSkill = itemdata.minProfessionSkill
+	item.craftedMinLevel = itemdata.minLevel
+	item.professionOnly = itemdata.professionOnly
+	item.bind = itemdata.bind
+	item.recipeName = itemdata.recipeName
+	item.sourceNote = itemdata.sourceNote
+	item.craftedCategory = itemdata.craftedCategory
+	item.professionSpecialization = itemdata.professionSpecialization
 	return item
 end
 
@@ -255,6 +451,61 @@ end
 local function GF_FormatVendorLocation(upgrade)
 	local vendor = upgrade.vendorName or upgrade.vendorSourceName or "Vendor"
 	return ("%s - Dalaran"):format(vendor)
+end
+
+local function GF_FormatCraftedLocation(upgrade)
+	local profession = upgrade.profession or upgrade.vendorSourceName or "Profession"
+	return ("Crafted: %s"):format(profession)
+end
+
+local function GF_FormatCraftedLine(upgrade)
+	local profession = upgrade.profession or "profession"
+	local skill = tonumber(upgrade.minProfessionSkill) or 0
+	local bind = upgrade.bind
+	local professionOnly = upgrade.professionOnly or bind == "bop"
+	local specialization = upgrade.professionSpecialization
+	local suffix = ""
+	if upgrade.craftedCategory == "pvp" then
+		suffix = " - PvP starter"
+	elseif upgrade.craftedCategory == "raid" then
+		suffix = " - raid craft"
+	elseif upgrade.craftedCategory == "pre_raid" then
+		suffix = " - pre-raid craft"
+	elseif upgrade.craftedCategory == "leveling" then
+		suffix = " - leveling craft"
+	end
+	if professionOnly then
+		if specialization and skill > 0 then return ("Requires %s %d (%s)%s"):format(profession, skill, specialization, suffix) end
+		if specialization then return ("Requires %s (%s)%s"):format(profession, specialization, suffix) end
+		if skill > 0 then return ("Requires %s %d%s"):format(profession, skill, suffix) end
+		return ("Requires %s%s"):format(profession, suffix)
+	end
+	if skill > 0 then return ("Made by %s %d%s"):format(profession, skill, suffix) end
+	return ("Made by %s%s"):format(profession, suffix)
+end
+
+local function GF_GetSourceTooltipLines(upgrade)
+	if not upgrade then return nil end
+	local lines = {}
+	if upgrade.sourceType == "currency" then
+		local costLine = GF_FormatVendorLine(upgrade)
+		lines[#lines + 1] = "Source: Currency reward"
+		lines[#lines + 1] = "Cost: " .. costLine
+		if upgrade.vendorName then lines[#lines + 1] = "Vendor: " .. upgrade.vendorName end
+		if upgrade.vendorLocation then lines[#lines + 1] = "Location: " .. upgrade.vendorLocation end
+	elseif upgrade.sourceType == "crafted" then
+		lines[#lines + 1] = "Source: Crafted item"
+		lines[#lines + 1] = GF_FormatCraftedLine(upgrade)
+		if upgrade.professionSpecialization then
+			lines[#lines + 1] = "Specialization: " .. upgrade.professionSpecialization
+		end
+		if upgrade.bind == "bop" or upgrade.professionOnly then
+			lines[#lines + 1] = "Bind: Profession-only"
+		elseif upgrade.bind == "boe" then
+			lines[#lines + 1] = "Bind: Tradeable craft"
+		end
+	end
+	return lines[1] and lines or nil
 end
 
 local function GF_GetDungeonLeafName(dungeonName)
@@ -758,17 +1009,26 @@ local PHASE_PRIORITY = {
 }
 
 local function get_access_priority(item)
+	if item and item.sourceType == "currency" then return 0, 0, 0, 0, 0 end
+	if item and item.sourceType == "crafted" then
+		if item.craftedCategory == "pvp" then return 4, 0, 0, 0, 0 end
+		if item.craftedCategory == "raid" then return 4, 1, 0, 0, 0 end
+		if item.bind == "boe" then return 2, 0, 0, 0, 0 end
+		if item.professionOnly or item.bind == "bop" then return 3, 0, 0, 0, 0 end
+		return 2, 0, 0, 0, 0
+	end
 	local dungeon = item and item.ident and GF_GetDungeonData(item.ident)
-	if not dungeon then return 99, 99, 99, 99, 99 end
+	if not dungeon then return 5, 99, 99, 99, 99 end
 	local difficulty = tonumber(dungeon.difficulty) or 99
-	local isRaid = difficulty >= 3 and 1 or 0
+	local contentBucket = difficulty >= 3 and 4 or 1
 	local phase = PHASE_PRIORITY[dungeon.phase] or 99
 	local minLevel = tonumber(dungeon.minLevel) or 0
 	local levelGap = math.max(0, minLevel - (tonumber(ItemScore.playerlevel) or 0))
-	return isRaid, difficulty, phase, levelGap, minLevel
+	return contentBucket, difficulty, phase, levelGap, minLevel
 end
 
 local function get_content_tier(item)
+	if item and (item.sourceType == "currency" or item.sourceType == "crafted") then return 0 end
 	local dungeon = item and item.ident and GF_GetDungeonData(item.ident)
 	if not dungeon then return 99 end
 	local difficulty = tonumber(dungeon.difficulty) or 99
@@ -784,6 +1044,65 @@ local function is_more_accessible(a, b)
 	if ar4 ~= br4 then return ar4 < br4 end
 	if ar5 ~= br5 then return ar5 < br5 end
 	return false
+end
+
+local function get_practical_score(item)
+	return tonumber(item and (item.change or item.score or item.deltascore or item.itemlvl)) or 0
+end
+
+local function is_raid_craft(item)
+	return item and item.sourceType == "crafted" and item.craftedCategory == "raid"
+end
+
+local function is_dungeon_drop(item)
+	if not item or item.sourceType then return false end
+	local dungeon = item.ident and GF_GetDungeonData(item.ident)
+	if not dungeon then return false end
+	local difficulty = tonumber(dungeon.difficulty) or 99
+	return difficulty < 3
+end
+
+local function raid_craft_beats_dungeon(_raidCraft, _dungeonItem)
+	-- Raid-crafted BoEs are useful fallback suggestions, but the default Gear Finder
+	-- path should prefer nearby dungeon drops instead of assuming auction access.
+	return false
+end
+
+local function is_close_practical_upgrade(a, b)
+	local aScore = get_practical_score(a)
+	local bScore = get_practical_score(b)
+	local best = math.max(aScore, bScore)
+	if best <= 0 then return true end
+	local gap = math.abs(aScore - bScore)
+	if (a and a.sourceType == "crafted" and a.craftedCategory == "raid") or (b and b.sourceType == "crafted" and b.craftedCategory == "raid") then
+		return gap <= math.max(12, best * 0.15)
+	end
+	return gap <= math.max(5, best * 0.08)
+end
+
+local function compare_practical_upgrade(slot, a, b)
+	if is_raid_craft(a) and is_dungeon_drop(b) then
+		return raid_craft_beats_dungeon(a, b)
+	elseif is_raid_craft(b) and is_dungeon_drop(a) then
+		return not raid_craft_beats_dungeon(b, a)
+	end
+	local aScore = get_practical_score(a)
+	local bScore = get_practical_score(b)
+	if not is_close_practical_upgrade(a, b) and aScore ~= bScore then
+		return aScore > bScore
+	end
+	local aStep = get_upgrade_step(slot, a)
+	local bStep = get_upgrade_step(slot, b)
+	if aStep ~= bStep and aStep ~= math.huge and bStep ~= math.huge then
+		return aStep < bStep
+	end
+	if is_more_accessible(a,b) then
+		return true
+	elseif is_more_accessible(b,a) then
+		return false
+	end
+	if aScore ~= bScore then return aScore > bScore end
+	return (tonumber(a.itemlvl) or 0) > (tonumber(b.itemlvl) or 0)
 end
 
 local function same_access_tier(a, b)
@@ -868,7 +1187,7 @@ local function queue_local_meta_candidate(itemlink, itemdata, ident, future)
 			texture = nil,
 			itemlvl = 0,
 			score = 0,
-			minlevel = 0,
+			minlevel = (itemdata and itemdata.minLevel) or meta.minLevel or 0,
 			cached_name = meta.name,
 			approximate = true,
 			force_approximate = true,
@@ -1119,7 +1438,7 @@ local function loot_score_dungeon_thread()
 					queue_bare_fallback_candidate(itemlink, itemdata, ident, false)
 					itemdata.resolve_attempts = (itemdata.resolve_attempts or 0) + 1
 					if itemdata.resolve_attempts >= GearFinder.ITEM_RESOLVE_RETRY_LIMIT then
-						ZGV:Debug("&gear dropping unresolved vendor item after %d attempts: %s",itemdata.resolve_attempts,tostring(itemlink))
+						ZGV:Debug("&gear dropping unresolved external item after %d attempts: %s",itemdata.resolve_attempts,tostring(itemlink))
 						GearFinder.HadUnresolvedItems = true
 						GearFinder.VendorItemsToScore[ident][index]=nil
 					else
@@ -1179,8 +1498,8 @@ local function loot_score_dungeon_thread()
 					GearFinder.VendorItemsToScore[ident][index]=nil
 				end
 			end
-			ZGV:Debug("&gear vendor scored %d of %d/%d",success_counter,total_current,total)
-			ZGV:Debug("&gear vendor failed %d",fail_counter)
+			ZGV:Debug("&gear external scored %d of %d/%d",success_counter,total_current,total)
+			ZGV:Debug("&gear external failed %d",fail_counter)
 			coroutine.yield()
 			local ready = success_counter / total * 100
 			GearFinder.MainFrame.Progress:SetPercent(ready)
@@ -1348,17 +1667,8 @@ local function loot_score_dungeon_thread()
 					end
 			elseif a.future ~= b.future then
 				return not a.future
-			elseif is_more_accessible(a,b) then
-				return true
-			elseif is_more_accessible(b,a) then
-				return false
-			else -- current items, prefer the smallest real progression step before raw score
-				local aStep = get_upgrade_step(i, a)
-				local bStep = get_upgrade_step(i, b)
-				if aStep ~= bStep then
-					return aStep < bStep
-				end
-				return a.score>b.score
+			else
+				return compare_practical_upgrade(i, a, b)
 			end
 		end)
 		prune_to_best_content_tier(slotupgrades)
@@ -1375,12 +1685,8 @@ local function loot_score_dungeon_thread()
 				end
 			elseif a.future ~= b.future then
 				return not a.future
-			elseif is_more_accessible(a,b) then
-				return true
-			elseif is_more_accessible(b,a) then
-				return false
 			else
-				return get_fallback_metric(a) > get_fallback_metric(b)
+				return compare_practical_upgrade(i, a, b)
 			end
 		end)
 		prune_to_best_content_tier(slotupgrades)
@@ -1465,6 +1771,8 @@ function GearFinder:ScoreDungeonItems()
 	GearFinder.DungeonItemsScored = false
 	GearFinder.HadUnresolvedItems = false
 	GearFinder.LastError = nil
+	GearFinder.PlayerProfessionSkills = nil
+	GearFinder.PlayerProfessionSpecializations = nil
 	reset_debug_slot_stats()
 
 	local player = ZGV.ItemScore.playerclass or "ALL"
@@ -1484,7 +1792,8 @@ function GearFinder:ScoreDungeonItems()
 	end
 
 	local faction = self.playerfaction=="Alliance" and 1 or 2
-	local sourceInstances, validDungeons, futureDungeons, validVendorSources, vendorItems = 0, 0, 0, 0, 0
+	local sourceInstances, validDungeons, futureDungeons, validVendorSources, vendorItems, craftedItems = 0, 0, 0, 0, 0, 0
+	local craftedSourceCount, validCraftedSources, craftedSkippedItems = 0, 0, 0
 	local invalidReasons = {}
 
 	-- 3.3.5a: no mythic+, no modified instances
@@ -1577,17 +1886,66 @@ function GearFinder:ScoreDungeonItems()
 			invalidReasons[comment or "invalid vendor source"] = (invalidReasons[comment or "invalid vendor source"] or 0) + 1
 		end
 	end
+	for sourceKey, source in pairs(ItemScore.GearFinderCraftedSources or {}) do
+		craftedSourceCount = craftedSourceCount + 1
+		local valid, comment = GF_IsValidCraftedSource(source)
+		if valid then
+			validCraftedSources = validCraftedSources + 1
+			validVendorSources = validVendorSources + 1
+			local ident = "crafted:" .. tostring(source.key or sourceKey)
+			GearFinder.VendorItemsToScore[ident] = GearFinder.VendorItemsToScore[ident] or {}
+			for itemid, itemSource in pairs(source.items or {}) do
+				local itemValid, itemComment = GF_IsValidCraftedItem(source, itemSource)
+				if itemValid then
+					local itemlink = "item:" .. tostring(itemid)
+					if GF_ShouldIncludeCandidate(itemlink, false) then
+						table.insert(GearFinder.VendorItemsToScore[ident], {
+							itemlink = itemlink,
+							sourceType = source.sourceType or "crafted",
+							vendorSource = source.key or sourceKey,
+							vendorSourceName = source.name,
+							profession = itemSource.profession or source.profession,
+							minProfessionSkill = itemSource.minSkill or source.minSkill,
+							minLevel = itemSource.minLevel or source.minLevel,
+							professionOnly = itemSource.professionOnly or source.professionOnly,
+							bind = itemSource.bind or source.bind,
+							recipeName = itemSource.recipeName,
+							sourceNote = itemSource.sourceNote or source.sourceNote,
+							craftedCategory = itemSource.category or source.category,
+							professionSpecialization = itemSource.specializationName or source.specializationName,
+						})
+						vendorItems = vendorItems + 1
+						craftedItems = craftedItems + 1
+					end
+				else
+					craftedSkippedItems = craftedSkippedItems + 1
+					invalidReasons[itemComment or "invalid crafted item"] = (invalidReasons[itemComment or "invalid crafted item"] or 0) + 1
+				end
+			end
+		else
+			invalidReasons[comment or "invalid crafted source"] = (invalidReasons[comment or "invalid crafted source"] or 0) + 1
+		end
+	end
 	GearFinder.DebugSummary.player = tostring(player)
 	GearFinder.DebugSummary.sourceInstances = sourceInstances
 	GearFinder.DebugSummary.validDungeons = validDungeons
 	GearFinder.DebugSummary.futureDungeons = futureDungeons
 	GearFinder.DebugSummary.validVendorSources = validVendorSources
 	GearFinder.DebugSummary.vendorItems = vendorItems
+	GearFinder.DebugSummary.craftedItems = craftedItems
+	GearFinder.DebugSummary.craftedSourceCount = craftedSourceCount
+	GearFinder.DebugSummary.validCraftedSources = validCraftedSources
+	GearFinder.DebugSummary.craftedSkippedItems = craftedSkippedItems
 	GearFinder.DebugSummary.invalidReasons = invalidReasons
 	GearFinder.DebugSummary.gear1 = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_1 and true or false
 	GearFinder.DebugSummary.gear2 = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_2 and true or false
 	GearFinder.DebugSummary.gear3 = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_3 and true or false
 	GearFinder.DebugSummary.gear4 = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_4 and true or false
+	GearFinder.DebugSummary.gearCraftedItems = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_crafted_items ~= false
+	GearFinder.DebugSummary.gearCraftedLevelingItems = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_crafted_leveling_items ~= false
+	GearFinder.DebugSummary.gearCraftedPvpItems = ZGV.db and ZGV.db.profile and ZGV.db.profile.gear_crafted_pvp_items ~= false
+	GearFinder.DebugSummary.professionSkills = GF_CompactMapKeys(GearFinder.PlayerProfessionSkills)
+	GearFinder.DebugSummary.professionSpecializations = GF_CompactMapKeys(GearFinder.PlayerProfessionSpecializations)
 
 	GearFinder.ScoreThread = coroutine.create(loot_score_dungeon_thread)
 	if GearFinder.ScoreTimer then 
@@ -1681,6 +2039,11 @@ local function make_button(object)
 				GameTooltip:SetHyperlink(button.link)
 			else
 				GameTooltip:SetText(button.slotName)
+			end
+			if button.sourceTooltipLines then
+				for _, line in ipairs(button.sourceTooltipLines) do
+					GameTooltip:AddLine(line, 0.92, 0.86, 0.68, true)
+				end
 			end
 			GameTooltip:Show()
 		end)
@@ -1974,7 +2337,7 @@ function GearFinder:CreateMainFrame()
 		:SetFont(FONT, 9)
 		:SetJustifyH("CENTER")
 		:SetTextColor(0.80, 0.78, 0.70)
-		:SetText("No dungeon, raid, or currency reward sources are enabled.")
+		:SetText("No dungeon, raid, currency reward, or crafted item sources are enabled.")
 	.__END
 	MF.NoSourcesFrame.Button = CHAIN(ZGV.CreateFrameWithBG("Button", nil, MF.NoSourcesFrame))
 		:SetPoint("BOTTOM", MF.NoSourcesFrame, "BOTTOM", 0, 12)
@@ -2273,10 +2636,11 @@ function GearFinder:DisplayResults()
 				tonumber(summary.validDungeons) or 0,
 				tonumber(summary.futureDungeons) or 0
 			),
-			("Pool C:%d  F:%d  V:%d  DB primed:%d  DB only:%d"):format(
+			("Pool C:%d  F:%d  X:%d  Crafted:%d  DB primed:%d  DB only:%d"):format(
 				currentCount,
 				futureCount,
 				vendorCount,
+				tonumber(summary.craftedItems) or 0,
 				tonumber(dbstats.primed) or 0,
 				tonumber(dbstats.dbonly) or 0
 			),
@@ -2288,7 +2652,21 @@ function GearFinder:DisplayResults()
 				tostring(summary.gear3),
 				tostring(summary.gear4)
 			),
+			("Craft src:%d/%d  skipped:%d  opts:%s/%s/%s"):format(
+				tonumber(summary.validCraftedSources) or 0,
+				tonumber(summary.craftedSourceCount) or 0,
+				tonumber(summary.craftedSkippedItems) or 0,
+				tostring(summary.gearCraftedItems),
+				tostring(summary.gearCraftedLevelingItems),
+				tostring(summary.gearCraftedPvpItems)
+			),
 		}
+		if summary.professionSkills and summary.professionSkills ~= "" then
+			lines[#lines + 1] = "Prof: " .. summary.professionSkills
+		end
+		if summary.professionSpecializations and summary.professionSpecializations ~= "" then
+			lines[#lines + 1] = "Spec: " .. summary.professionSpecializations
+		end
 		if reasonList[1] then
 			lines[#lines + 1] = ("Rejects: %s (%d)"):format(reasonList[1].reason, reasonList[1].count)
 		end
@@ -2318,6 +2696,7 @@ function GearFinder:DisplayResults()
 			button.itemicon:SetTexture(icon or button.slotTexture)
 			button.itemlink:SetText(displayLink or displayName)
 			button.link = tooltipLink or nil
+			button.sourceTooltipLines = GF_GetSourceTooltipLines(upgrade)
 			button.itemicon:SetDesaturated(upgrade.future)
 			button:SetAlpha(1)
 			button:SetResultState(true, bis and true or false)
@@ -2344,6 +2723,11 @@ function GearFinder:DisplayResults()
 				button.dungeon = nil
 				button.itemdungeon:SetText(GF_FormatVendorLocation(upgrade))
 				button.itemencounter:SetText(GF_FormatVendorLine(upgrade))
+			elseif upgrade.sourceType == "crafted" then
+				button.dungeonguide = nil
+				button.dungeon = nil
+				button.itemdungeon:SetText(GF_FormatCraftedLocation(upgrade))
+				button.itemencounter:SetText(GF_FormatCraftedLine(upgrade))
 			elseif upgrade.future then
 				button:SetAlpha(0.5)
 				local playeritemlvl = ItemScore.playeritemlvl or 0
@@ -2388,6 +2772,7 @@ function GearFinder:DisplayResults()
 			button.itemicon:SetTexture(button.slotTexture)
 			button.itemlink:SetText(" ")
 			button.link = nil
+			button.sourceTooltipLines = nil
 			button.dungeonguide = nil
 			button.dungeon = nil
 			button.itemdungeon:SetText(L["gearfinder_no_upgrade"])
@@ -2416,7 +2801,7 @@ function GearFinder:DisplayResults()
 	local dungeon_totals = {}
 	for _, slotupgrades in pairs(GearFinder.UpgradeQueue or {}) do
 		local candidate = slotupgrades and slotupgrades[1]
-		if candidate and candidate.ident and candidate.sourceType ~= "currency" and candidate.ident~="titanrune_alpha" and candidate.ident~="titanrune_beta" then
+		if candidate and candidate.ident and candidate.sourceType ~= "currency" and candidate.sourceType ~= "crafted" and candidate.ident~="titanrune_alpha" and candidate.ident~="titanrune_beta" then
 			local bucket = dungeon_totals[candidate.ident] or {count=0, weight=0}
 			bucket.count = bucket.count + 1
 			bucket.weight = bucket.weight + math.max(0, tonumber(candidate.change) or tonumber(candidate.score) or tonumber(candidate.itemlvl) or 0)
@@ -2505,6 +2890,7 @@ function GearFinder:ShowNoSourcesMessage()
 		button.itemicon:SetTexture(button.slotTexture)
 		button.itemlink:SetText(" ")
 		button.link = nil
+		button.sourceTooltipLines = nil
 		button.dungeonguide = nil
 		button.dungeon = nil
 		button.bisTooltipText = nil
@@ -2526,7 +2912,7 @@ function GearFinder:ShowNoSourcesMessage()
 	MF.DungeonMessage:SetText("Gear Finder sources")
 	MF.DungeonName:SetText("No sources enabled")
 	MF.DungeonName:Show()
-	MF.DungeonDesc:SetText("Choose dungeon, raid, or currency reward sources.")
+	MF.DungeonDesc:SetText("Choose dungeon, raid, currency reward, or crafted item sources.")
 	MF.DungeonDesc:Show()
 	MF.DungeonReason:SetText("")
 	MF.DungeonReason:Hide()
@@ -2585,6 +2971,7 @@ function GearFinder:ClearResults()
 		button.itemicon:SetTexture(button.slotTexture)
 		button.itemlink:SetText(" ")
 		button.link = nil
+		button.sourceTooltipLines = nil
 		button.dungeonguide = nil
 		button.bisTooltipText = nil
 		if button.bisbadge then button.bisbadge:Hide() end

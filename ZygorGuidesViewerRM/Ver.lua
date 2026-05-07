@@ -1,4 +1,4 @@
 assert(ZygorGuidesViewer,"Zygor Guides Viewer failed to load.")
-ZygorGuidesViewer.revision = 155
+ZygorGuidesViewer.revision = 156
 ZygorGuidesViewer.version = "3.0." .. ZygorGuidesViewer.revision
-ZygorGuidesViewer.date = "2026-05-06 13:27:54 -05:00"
+ZygorGuidesViewer.date = "2026-05-07 09:50:42 -05:00"
