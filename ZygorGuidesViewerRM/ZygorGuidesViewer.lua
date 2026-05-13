@@ -2300,26 +2300,31 @@ do
 	end
 
 	function me:ActionButtons_Refresh(force)
-		if not self.db or not self.db.profile or not self.db.profile.actionbuttonbar_enabled then
+		local profile = self.db and self.db.profile
+		if InCombatLockdown() then
+			local bar = self.ActionButtonBar
+			self.actionButtonsRefreshPending = true
+			if bar then
+				if not profile or not profile.actionbuttonbar_enabled or not self.Frame or not self.Frame:IsShown() then
+					self:ActionButtons_SetPendingCombatState(true)
+				else
+					local specs = self:GetCurrentStepActionSpecs()
+					local shouldShow = (not profile.actionbuttonbar_onlywhenneeded) or (#specs > 0)
+					local matches = self:ActionButtons_BarMatchesSpecs(bar, specs)
+					self:ActionButtons_SetPendingCombatState((not shouldShow) or (not matches))
+					if shouldShow and matches then
+						self:ActionButtons_UpdateCooldowns()
+					end
+				end
+			end
+			return
+		end
+		if not profile or not profile.actionbuttonbar_enabled then
 			if self.ActionButtonBar then self.ActionButtonBar:Hide() end
 			return
 		end
 		if not self.Frame or not self.Frame:IsShown() then
 			if self.ActionButtonBar then self.ActionButtonBar:Hide() end
-			return
-		end
-		if InCombatLockdown() then
-			local bar = self.ActionButtonBar
-			local specs = self:GetCurrentStepActionSpecs()
-			self.actionButtonsRefreshPending = true
-			if bar then
-				local shouldShow = (not self.db.profile.actionbuttonbar_onlywhenneeded) or (#specs > 0)
-				local matches = self:ActionButtons_BarMatchesSpecs(bar, specs)
-				self:ActionButtons_SetPendingCombatState((not shouldShow) or (not matches))
-				if shouldShow and matches then
-					self:ActionButtons_UpdateCooldowns()
-				end
-			end
 			return
 		end
 		self.actionButtonsRefreshPending = nil

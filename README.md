@@ -1,4 +1,4 @@
-# Zygor Guides Viewer Remaster
+﻿# Zygor Guides Viewer Remaster
 
 Remastered Zygor Guides Viewer for **World of Warcraft: Wrath of the Lich King (WotLK) 3.3.5a (build 12340)**.
 
@@ -164,6 +164,13 @@ This addon is fully open source and can be inspected before use.
 
 ## Changelog
 
+### Revision 165 - 3.0.165
+
+- Fixed a combat-lockdown blocked action error where the floating action button bar could call protected `Hide()` paths while entering combat.
+- Added missing item database records for `23478` Recruit's Pants, `23479` Recruit's Robe, `1374` Frayed Shoes, and `2650` Flimsy Chain Boots.
+- Updated `ZygorItemDB.lua` metadata to `2026-05-13 09:12:38 -05:00` and `24937 Items`.
+- Updated addon version metadata to 3.0.165.
+
 ### Revision 164 - 3.0.164
 
 - Added a small remaster compact-view spacing adjustment for 1-5 step mode so each inline step background/border has extra padding around the text.
@@ -196,149 +203,6 @@ Thanks Hypo!
 - Corrected additional WotLK dungeon boss fallback IDs for Nexus, Azjol-Nerub, Halls of Stone, Halls of Reflection, and Trial of the Champion result labels.
 - Added a Heroic difficulty suffix to Gear Finder item rows when a recommendation comes from the heroic version of a dungeon.
 - Updated addon version metadata to 3.0.157.
-
-### Revision 156 - 3.0.156
-
-- Added profession-crafted Gear Finder sources with separate options for crafted items, leveling crafts, and PvP starter crafted sets.
-- Added crafted-source display details, including profession, minimum skill, specialization/profession-only requirements, bind behavior, and source tooltips.
-- Expanded crafted item metadata coverage so crafted suggestions continue to resolve slot and armor/weapon-family details during item-cache misses.
-- Updated Gear Finder practical ranking so nearby dungeon drops are preferred over raid-crafted BoE fallback suggestions by default.
-- Fixed Pit of Saron Gear Finder boss labels for normal and heroic loot, including Garfrost, Krick and Ick, and Scourgelord Tyrannus fallback mappings.
-- Updated addon version metadata to 3.0.156.
-
-### Revision 155 - 3.0.155
-
-- Added sourced Emblem of Heroism currency reward suggestions in Gear Finder, including currency cost, faction vendor, and Dalaran location display.
-- Added a Gear Finder no-source message with an Open Source Settings button when no dungeon, raid, or currency reward sources are enabled.
-- Made Gear Finder refresh immediately when source options are changed while the finder is open.
-- Fixed the currency reward source table load path for the 3.3.5a addon runtime and backfilled missing item database records for IDs `1749`, `1761`, `1795`, `1830`, and `3794`.
-- Updated addon version metadata to 3.0.155.
-
-### Revision 154 - 3.0.154
-
-- Expanded Gear Finder footer artwork so every suggestable dungeon and raid source resolves to an existing guide image, including Classic, TBC, WotLK raids, and world-boss style sources.
-- Reworked the recommended dungeon footer background into a full-width image treatment with a UI-color-to-art gradient while keeping the dungeon title, summary, and recommendation reason readable.
-- Added level-appropriate fallback footer artwork for the no-recommendation state and removed the hardcoded Icecrown debug placeholder.
-- Updated addon version metadata to 3.0.154.
-
-### Revision 153 - 3.0.153
-
-- Remastered the Gear Finder presentation with a cleaner two-column card layout, centered title treatment, warmer remaster-aligned panel colors, and a more intentional footer hierarchy.
-- Refined Gear Finder row geometry and typography for better readability, spacing, and slot-grid fit, including blocked-row styling for no-upgrade states such as two-hand offhand conflicts.
-- Updated addon version metadata to 3.0.153.
-
-### Revision 152 - 3.0.152
-
-- Carried the BIS rollout forward into a validation-focused release after the full class/spec phase coverage pass, keeping curated BIS annotations broad while tightening remaining early-tier healer/caster side-slot carry-forward gaps where the tier rows had dropped known Phase 1 weapons or wands.
-- Refined curated BIS data for multiple specs with safer early-tier weapon, shield, relic, and wand continuity so Gear Finder stars stay consistent with the intended progression path without changing recommendation ranking.
-- Updated the BIS work tracker to pivot from broad data fill toward in-game validation and targeted mismatch fixes, reflecting that the current work is now primarily spot-checking and maintenance.
-- Updated addon version metadata to 3.0.152.
-
-### Revision 151 - 3.0.151
-
-- Normalized gear-signal handling so Gear Advisor, tooltip comparisons, master-loot notices, and loot-roll markers defer unresolved DB-backed items until live resolution is ready, improving same-item verdict consistency across the addon.
-- Added curated BIS annotations to Gear Finder without changing upgrade ranking, including gold-star BIS markers, Best In Slot Equipped status, and WotLK phase-aware BIS data scaffolding.
-- Expanded curated BIS coverage across all class and spec builds through pre-raid, T7, T8, T9, T10, Ruby Sanctum, and final late-phase targets, then refined side-slot and relic progression where it was safe to do so.
-- Fixed Gear Finder ranged-slot handling so wands and other ranged upgrades are not incorrectly blocked by the two-hand offhand rule.
-- Updated addon version metadata to 3.0.151.
-
-### Revision 149 - 3.0.149
-
-- Continued the item database audit and materialized confirmed dirty imported stat patterns directly into `ZygorItemDB.lua`, including caster `armorPenetration -> spellPower`, physical `mp5 -> armorPenetration`, and tank/physical `spellPenetration -> blockValue` corrections.
-- Verified the remaining suspicious hybrid, relic, trinket, and held-offhand buckets against trusted TBC/WotLK references; the current audit now leaves only QA/test rows flagged and no confirmed gameplay-relevant dirty items.
-- Refreshed the live `ZygorItemDB.lua` header metadata after the cleanup pass and kept runtime item resolution aligned with the cleaned database.
-- Updated addon version metadata to 3.0.149.
-
-### Revision 148 - 3.0.148
-
-- Continued the DB-first gear-system rollout so Gear Finder, Gear Advisor, equip comparisons, tooltip suggestions, loot-roll markers, and bank-open gear checks rely more consistently on shared resolved item data.
-- Improved Gear Finder presentation and recommendation quality with fuller footer handling, corrected boss labels, distinct ring and trinket recommendations, and more reasonable dungeon suggestion behavior.
-- Hardened Gear Advisor compare popups with better long-stat layout, expanded vertical sizing, per-line stat rendering, and more accurate DB-plus-live stat resolution for equip-effect and suspicious imported item rows.
-- Added item DB audit tooling and continued cleanup of dirty imported item-stat patterns, including targeted fixes such as Mercurial Alchemist Stone and caster-item stat remapping.
-- Updated addon version metadata to 3.0.148.
-### Revision 147 - 3.0.147
-
-- Extended the DB-first gear model across Gear Finder, Gear Advisor, tooltip scoring, loot-roll markers, bank-open upgrade checks, and related gear suggestion surfaces.
-- Added local bank upgrade scanning and bank-aware equip handling, including rechecks while the bank stays open during spec changes.
-- Improved Gear Finder result quality with distinct ring and trinket recommendations, more reliable boss-name resolution, better reasonable-upgrade selection, and a reworked full-width footer recommendation area.
-- Hardened missing-item handling by batching equippable-only database warnings and added the missing Mercurial Alchemist Stone item database entry.
-- Fixed multiple gear tooltip and advisor issues, including duplicate stat lines, false equip-failed spam, random-suffix exact-stat waiting, and tooltip/live-scan fallback for equip-effect items.
-- Updated addon version metadata to 3.0.147.
-### Revision 145 - 3.0.145
-
-- Removed the broken built-in Retail skin option and deleted the unused Retail experiment files from the active addon copy.
-- Fixed multiple /zgold initialization and nil-data crashes across Auctions, Crafting, item pricing, item classification, tutorial helpers, and auction house appraiser button-state handling.
-- Deduped Gold Guide farming and gathering route rows, improved fallback names and icons for sparse entries such as Core Leather, and corrected missing Gold Guide help/tutorial localization text.
-- Improved Gold Guide help, info, and tutorial presentation, including corrected image resolution, popup text handling, and tooltip positioning for bottom-row entries.
-- Aligned the Auction House appraiser scan flow more closely with the retail behavior on the WotLK API, including cleaner scan-state messaging, timeout recovery, and scan button feedback.
-- Fixed the Auction House appraiser settings gear to open the remaster gold options section.
-- Updated addon version metadata to 3.0.145.
-
-### Revision 144 - 3.0.144
-
-- Fixed a guide-boundary step helper crash where adjacent guide objects could exist without parsed steps, causing skip and auxiliary checks to index guide.steps unsafely.
-- Fixed a Disable Route/Loop Stacking viewer crash by safely truncating oversized non-stacked |route displays instead of running past the fixed step-line frame pool.
-- Added multigoto, a new multi-location waypoint command that accepts route-style coordinate chains but behaves like ordered plain goto points rather than a route/loop ant-trail path.
-- Kept multigoto integrated with the existing auto-advance and waypoint retargeting logic while explicitly excluding it from marching-ant routegroup rendering.
-- Continued Gold Guide route improvements so cleaned runtime route wrappers, same-step route progression, and route waypoint retargeting behave more reliably in practical use.
-- Updated addon version metadata to 3.0.144.
-
-### Revision 143 - 3.0.143
-
-- Integrated the useful 3.3.5a-safe parts of repo PR 27 instead of copying it wholesale.
-- Removed `BackdropTemplate` dependence from the forked dropdown menu code and restored explicit backdrop setup so `UIDropDownFork` menus still render on Wrath.
-- Added narrow compatibility guards in `LibRover` for retail-only `C_Map`, `Enum.UIMapType`, and `C_Garrison` usage in the touched startup and debug-menu paths.
-- Kept the compatibility merge intentionally narrow and did not ship the PR backup file.
-- Fixed Gold Guide tab-switch nil crashes and improved `/zgold` initialization so repeated opens and tab changes are stable.
-- Restored Gold route registration for parsed raw-text guides so included farming and gathering route guides are actually recognized and loaded by Gold Guide.
-- Added Gold route validation and route-inspection tooling, then corrected duplicate/placeholder route selection so the effective Wrath route set validates cleanly.
-- Fixed several Gold route metadata issues and updated the `Borean Leather` route to a stronger Wrath-appropriate `Sholazar Basin` loop.
-- Reworked Gold route loading so farming and gathering guides open cleaned runtime route wrappers instead of exposing raw control lines such as `goldtracker`.
-- Fixed same-step route waypoint progression so generated route/path points now advance the active waypoint target automatically as each point completes.
-- Added internal waypoint ant-trail options for minimap display mode and trail density, localized them across the supported main locale files, and improved the trail visuals and sizing.
-- Improved Gold Guide crafting support on Wrath with detailed recipe caching, safer dynamic guide generation, and a usable low-data `Expert` browse mode.
-- Continued the non-NPC localization pass by adding the new route-trail option translations to all main locale files.
-- Updated addon version metadata to `3.0.143`.
-### Revision 138 - 3.0.138
-
-- Refreshed the Gear Advisor equip / compare popup to better match the remastered Guide Viewer styling while preserving the original equip recommendation behavior.
-- Updated the popup presentation with a cleaner framed header, improved footer and button styling, and safer cosmetic-only layout polish.
-- Improved bind-on-equip handling so BOE upgrade prompts use a single compare popup, show the warning above the footer, and avoid immediately reopening over Blizzard''s bind confirmation.
-- Fixed bag and mail acquisition refresh handling so newly pulled items can trigger upgrade suggestions when they land in your bags.
-- Updated addon version metadata to `3.0.138`.
-
-### Revision 137 - 3.0.137
-
-- Minor bug fixes and stability improvements.
-
-### Revision 136 - 3.0.136
-
-- Added a clearer Stat Weights summary with a green `Active Profile` line so the live build is easier to distinguish from the selected edit target.
-- Added a note clarifying that selecting another class/spec changes which weights you edit, not your live active build, unless an override is enabled for your own class.
-- Added an `Override Active Build` toggle for your own class so the selected spec can explicitly override the detected active build for tooltips and gear recommendations.
-- Made active-build overrides persist per active talent group/spec slot instead of as one global override.
-- Updated ItemScore tooltips and summary labels so overridden builds are shown as overridden instead of incorrectly labeled as detected.
-- Improved pre-talent Stat Weights behavior so explicit pre-10 / no-points-spent active choices can be saved and kept until talent-based detection becomes meaningful.
-- Made applying a live stat-weight set trigger the existing deferred gear rescoring and bag upgrade scan path without adding a second heavy scan loop.
-- Restored the embedded Stat Weights scrollbar path and improved the Guide Manager options host layout so long pages such as `Show All Stats` can scroll again.
-- Added in-place Stat Weights tab refresh handling so active talent-group swaps rebuild the open ItemScore pane and resync the player-class selected build to the new active profile.
-- Updated addon version metadata to `3.0.136`.
-
-### Revision 131 - 135 - 3.0.131 to 3.0.135
-
-- Added the repository changes merged from PR 24 by [`hypopheria2k`](https://github.com/hypopheria2k).
-- Consolidated the intermediate `3.0.131` through `3.0.135` repo-side update range into this changelog entry for historical tracking.
-
-### Revision 130 - 3.0.130
-
-- Fixed a first-login Stat Weights / Gear Advisor timing issue where the active build could initially fall back to the class baseline (such as Discipline) until `/reload` was used.
-- Added an extra delayed ItemScore refresh after `LOADING_SCREEN_DISABLED` so active talent data has a second chance to settle before the selected build is finalized on login.
-- Fixed an issue with `|icon` not being applied since .114 update.
-- Fixed an issue with the new `|buttonicon` for replacing the action button icon for kill/talk.
-- Verified the "Ant Trail" for multi-`|goto`, `|route`, and `|loop` work as intended. (not active on multi-goto)
-- Fixed an issue with `|title` syntax not replacing the Title for the Waypoint.
-- Fixed an issue where using `info` as a blank space line causes `|icon` and/or `|buttonicon` to be multiplied incorrectly, stacked, and otherwise misplaced.
-- Updated addon version metadata to 3.0.130.
 
 ## Notes
 
